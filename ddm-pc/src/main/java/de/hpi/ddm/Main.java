@@ -12,31 +12,29 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		
-		CommandMaster commandMaster = new CommandMaster();
+	CommandMaster commandMaster = new CommandMaster();
         CommandSlave commandSlave = new CommandSlave();
         JCommander jCommander = JCommander.newBuilder()
-        	.addCommand(MasterSystem.MASTER_ROLE, commandMaster)
+            .addCommand(MasterSystem.MASTER_ROLE, commandMaster)
             .addCommand(SlaveSystem.SLAVE_ROLE, commandSlave)
             .build();
         
         try {
-        	jCommander.parse(args);
+            jCommander.parse(args);
 
             if (jCommander.getParsedCommand() == null)
                 throw new ParameterException("No command given.");
 
             switch (jCommander.getParsedCommand()) {
                 case MasterSystem.MASTER_ROLE:
-                	ConfigurationSingleton.get().update(commandMaster);
-                	DatasetDescriptorSingleton.get().update(commandMaster);
-                	
-                	MasterSystem.start();
+                    ConfigurationSingleton.get().update(commandMaster);
+                    DatasetDescriptorSingleton.get().update(commandMaster);
+                    MasterSystem.start();
                     break;
                 case SlaveSystem.SLAVE_ROLE:
-                	ConfigurationSingleton.get().update(commandSlave);
-                	DatasetDescriptorSingleton.set(null);
-                	
-                	SlaveSystem.start();
+                    ConfigurationSingleton.get().update(commandSlave);
+                    DatasetDescriptorSingleton.set(null);
+                	    SlaveSystem.start();
                     break;
                 default:
                     throw new AssertionError();
@@ -50,5 +48,5 @@ public class Main {
             }
             System.exit(1);
         }
-	}
+    }
 }
