@@ -51,6 +51,8 @@ public class Master extends AbstractLoggingActor {
 	public static class RegistrationMessage implements Serializable {
 		private static final long serialVersionUID = 3303081601659723997L;
 	}
+        
+        
 	
 	/////////////////
 	// Actor State //
@@ -59,6 +61,9 @@ public class Master extends AbstractLoggingActor {
 	private final ActorRef reader;
 	private final ActorRef collector;
 	private final List<ActorRef> workers;
+        
+        private List<String> passwordHashes;
+        private List<List<String>> hintHashes;
 
 	private long startTime;
 	
@@ -89,10 +94,10 @@ public class Master extends AbstractLoggingActor {
 	protected void handle(StartMessage message) {
 		this.startTime = System.currentTimeMillis();
 		
-		this.reader.tell(new Reader.ReadMessage(), this.self());
+		// this.reader.tell(new Reader.ReadMessage(), this.self());
 	}
 	
-	protected void handle(BatchMessage message) {
+	protected void handle(BatchMessage message) { // receiving a batch of input data from Reader
 		
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
 		// The input file is read in batches for two reasons: /////////////////////////////////////////////////
@@ -101,17 +106,33 @@ public class Master extends AbstractLoggingActor {
 		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
 		
-		if (message.getLines().isEmpty()) {
+		if (message.getLines().isEmpty()) { // if nothing new is read tell the Collector to print the results
 			this.collector.tell(new Collector.PrintMessage(), this.self());
 			this.terminate();
 			return;
 		}
 		
-		for (String[] line : message.getLines())
-			System.out.println(Arrays.toString(line));
+		for (String[] line : message.getLines()) {
+                        passwordHashes.add(line[4]);
+                        List<String> hints = null;
+                        for(int i = 5; i < line.length; i++){
+                            hints.add(line[i]);
+                        }
+                        hintHashes.add(hints);
+                        
+                        System.out.println(Arrays.toString(line)); // output what is received
+                }
+                
+                // master needs to wait for workers -> NO, there will already be some local workers once this function is started, assign range to worker once he registers to master
+                // then extract all the hint hashes from this message
+                // create workers? no, they will join  maybe;
+                // assign each worker a range to work on
+                // start asking for results
+                
+                
 		
 		this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
-		this.reader.tell(new Reader.ReadMessage(), this.self());
+		this.reader.tell(new Reader.ReadMessage(), this.self()); // tell the reader to read more
 	}
 	
 	protected void terminate() {
@@ -129,13 +150,17 @@ public class Master extends AbstractLoggingActor {
 		this.log().info("Algorithm finished in {} ms", executionTime);
 	}
 
-	protected void handle(RegistrationMessage message) {
-		this.context().watch(this.sender());
-		this.workers.add(this.sender());
+	protected void handle(RegistrationMessage message) { // watching worker that registers
+                System.out.println("WORKER REGISTERED!");
+                this.context().watch(this.sender());
+                this.workers.add(this.sender());
+                
+                this.sender().tell(new Worker.hashRangeMessage("AAAAAAAAA", 'B', 10), this.self());
+                
 //		this.log().info("Registered {}", this.sender());
 	}
 	
-	protected void handle(Terminated message) {
+	protected void handle(Terminated message) { // remove actor that terminated
 		this.context().unwatch(message.getActor());
 		this.workers.remove(message.getActor());
 //		this.log().info("Unregistered {}", message.getActor());

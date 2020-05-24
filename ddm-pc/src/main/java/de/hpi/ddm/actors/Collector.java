@@ -65,11 +65,11 @@ public class Collector extends AbstractLoggingActor {
 				.build();
 	}
 
-	protected void handle(CollectMessage message) {
+	protected void handle(CollectMessage message) { // receiving CollectMessage from Master and storing results
 		this.results.add(message.getResult());
 	}
 	
-	protected void handle(PrintMessage message) {
+	protected void handle(PrintMessage message) { // print all the results
 		this.results.forEach(result -> this.log().info("{}", result));
 	}
 }

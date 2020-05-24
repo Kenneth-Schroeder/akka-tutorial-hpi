@@ -41,7 +41,7 @@ public class Reader extends AbstractLoggingActor {
 	
 	private int bufferSize;
 	
-	private List<String[]> buffer;
+	private List<String[]> buffer; // buffer of lines read from file
 	
 	/////////////////////
 	// Actor Lifecycle //
@@ -75,9 +75,8 @@ public class Reader extends AbstractLoggingActor {
 				.build();
 	}
 
-	private void handle(ReadMessage message) throws Exception {
-		this.sender().tell(new Master.BatchMessage(new ArrayList<>(this.buffer)), this.self());
-		
+	private void handle(ReadMessage message) throws Exception { // when receiving the ReadMessage from the Master send him a BatchMessage
+		this.sender().tell(new Master.BatchMessage(new ArrayList<>(this.buffer)), this.self()); // creating a message for the master and sending one full buffer
 		this.read();
 	}
 	
@@ -85,7 +84,7 @@ public class Reader extends AbstractLoggingActor {
 		this.buffer.clear();
 		
 		String[] line;
-		while ((this.buffer.size() < this.bufferSize) && ((line = this.reader.readNext()) != null))
+		while ((this.buffer.size() < this.bufferSize) && ((line = this.reader.readNext()) != null)) // continuously reading from file and writing to buffer until it is full
 			this.buffer.add(line);
 	}
 }
