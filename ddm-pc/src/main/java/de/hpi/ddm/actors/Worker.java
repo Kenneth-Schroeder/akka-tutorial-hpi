@@ -2,6 +2,9 @@ package de.hpi.ddm.actors;
 import org.apache.commons.lang3.ArrayUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.TreeMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
@@ -44,12 +47,30 @@ public class Worker extends AbstractLoggingActor {
 	// Actor Messages //
 	////////////////////
         
-        @Data @NoArgsConstructor @AllArgsConstructor // creates constructors automatically
+        @Data @AllArgsConstructor // creates constructors automatically
 	public static class hashRangeMessage implements Serializable { // hash all string of length l starting with prefix and using all characters but 'exclude'
                 private static final long serialVersionUID = 8343040942748609598L;
                 private String prefix;
                 private char exclude;
-                private int length;
+	}
+        
+        @Data @AllArgsConstructor
+        public static class checkIfFoundMessage implements Serializable {
+                private static final long serialVersionUID = 8343040942748609598L;
+                private String hash;
+	}
+        
+        @Data @AllArgsConstructor
+        public static class hashesOfInterestMessage implements Serializable {
+                private static final long serialVersionUID = 8343040942748609598L;
+                private HashMap<String, LinkedList<Integer>> hashes;
+	}
+        
+        @Data @AllArgsConstructor
+        public static class crackPasswordMessage implements Serializable {
+                private static final long serialVersionUID = 8343040942748609598L;
+                private String hash;
+                private String letters;
 	}
 
 	/////////////////
@@ -58,9 +79,9 @@ public class Worker extends AbstractLoggingActor {
 
 	private Member masterSystem;
 	private final Cluster cluster;
-        HashMap<String, String> reverseSHA = new HashMap<String, String>();
+        TreeMap<String, String> reverseSHA = new TreeMap<String, String>();
+        private HashMap<String, LinkedList<Integer>> hashesOfInterest;
         
-	
 	/////////////////////
 	// Actor Lifecycle //
 	/////////////////////
@@ -88,27 +109,55 @@ public class Worker extends AbstractLoggingActor {
 				.match(MemberUp.class, this::handle)
 				.match(MemberRemoved.class, this::handle)
                                  .match(hashRangeMessage.class, this::handle)
+                                 .match(checkIfFoundMessage.class, this::handle)
+                                 .match(hashesOfInterestMessage.class, this::handle)
+                                 .match(crackPasswordMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
 	}
         
+        private void handle(crackPasswordMessage message){
+            // TODO
+        }
+        
+        private void handle(hashesOfInterestMessage message){
+            hashesOfInterest = message.hashes;
+            this.sender().tell(new Master.idleMessage(), this.self());
+        }
+        
+        private void handle(checkIfFoundMessage message){
+            if(reverseSHA.containsKey(message.hash)){
+                this.sender().tell(new Master.foundHashMessage(reverseSHA.get(message.hash), message.hash), this.self());
+            }
+        }
+        
         private void handle(hashRangeMessage message) { 
             // TODO exclude message.prefix characters too and just add all permutations of remaining characters to the end (that works for the hints)
-		String str = "ABCDEFGHIJK"; 
-                char[] possibleCharacters = str.toCharArray();
-                possibleCharacters = ArrayUtils.removeElement(possibleCharacters, message.exclude);
-                String test = new String(possibleCharacters);
-                System.out.println("possible Chars " + test);
-                System.out.println(message.length - message.prefix.length());
+		String suffixCharacters = "";
                 
-                ArrayList<String> permutations = new ArrayList<String>();
-                heapPermutation(possibleCharacters, 10, message.length - message.prefix.length(), permutations);
-                
-                for(int i = 0; i < permutations.size(); i++){
-                    String input = message.prefix + permutations.get(i);
-                    //System.out.println("Just hashed " + input);
-                    reverseSHA.put(hash(input), input);
+                for(char c : "ABCDEFGHIJK".toCharArray()){
+                    if(message.prefix.indexOf(c) == -1){ // character not in prefix, thus can be used for suffix
+                        suffixCharacters = suffixCharacters + c;
+                    }
                 }
+                
+                char[] possibleCharacters = suffixCharacters.toCharArray();
+                possibleCharacters = ArrayUtils.removeElement(possibleCharacters, message.exclude);
+                
+                ArrayList<String> suffixes = new ArrayList<String>();
+                heapPermutation(possibleCharacters, possibleCharacters.length, suffixes, possibleCharacters.length);
+                
+                for(int i = 0; i < suffixes.size(); i++){
+                    String input = message.prefix + suffixes.get(i);
+                    String _hash = hash(input);
+                    if(hashesOfInterest.containsKey(_hash)){
+                        this.sender().tell(new Master.foundHashMessage(input, _hash), this.self());
+                    }
+                    //reverseSHA.put(_hash, input);
+                }
+                 
+                this.log().info("Finished all hints with prefix " + message.prefix + "... that are not using " + message.exclude);
+                this.sender().tell(new Master.idleMessage(), this.self());
 	}
 
 	private void handle(CurrentClusterState message) { // used to find Master and register to him
@@ -156,13 +205,13 @@ public class Worker extends AbstractLoggingActor {
 	// Generating all permutations of an array using Heap's Algorithm
 	// https://en.wikipedia.org/wiki/Heap's_algorithm
 	// https://www.geeksforgeeks.org/heaps-algorithm-for-generating-permutations/
-	private void heapPermutation(char[] a, int size, int n, List<String> l) { // saves all permutations of size 'size' of chars a in l
+	private void heapPermutation(char[] a, int size, List<String> l, int len) { // saves all permutations of size 'size' of chars a in l
 		// If size is 1, store the obtained permutation
-		if (size == 1)
+		if (size == a.length-len+1) // 1 ; suppose size starts at 10, then it will have all permutations at len(a) - len +1 // TODO DOESNT WORK
 			l.add(new String(a));
 
 		for (int i = 0; i < size; i++) {
-			heapPermutation(a, size - 1, n, l);
+			heapPermutation(a, size - 1, l, len);
 
 			// If size is odd, swap first and last element
 			if (size % 2 == 1) {
