@@ -131,11 +131,10 @@ public class Worker extends AbstractLoggingActor {
             }
         }
         
-        private void handle(hashRangeMessage message) { 
-            // TODO exclude message.prefix characters too and just add all permutations of remaining characters to the end (that works for the hints)
+        private void handle(hashRangeMessage message) {
 		String suffixCharacters = "";
                 
-                for(char c : "ABCDEFGHIJK".toCharArray()){
+                for(char c : "ABCDEFGHIJK".toCharArray()){ // TODO hardcoded
                     if(message.prefix.indexOf(c) == -1){ // character not in prefix, thus can be used for suffix
                         suffixCharacters = suffixCharacters + c;
                     }
@@ -207,7 +206,7 @@ public class Worker extends AbstractLoggingActor {
 	// https://www.geeksforgeeks.org/heaps-algorithm-for-generating-permutations/
 	private void heapPermutation(char[] a, int size, List<String> l, int len) { // saves all permutations of size 'size' of chars a in l
 		// If size is 1, store the obtained permutation
-		if (size == a.length-len+1) // 1 ; suppose size starts at 10, then it will have all permutations at len(a) - len +1 // TODO DOESNT WORK
+		if (size == a.length-len+1) 
 			l.add(new String(a));
 
 		for (int i = 0; i < size; i++) {
