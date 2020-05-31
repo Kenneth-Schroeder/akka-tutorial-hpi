@@ -136,7 +136,8 @@ public class Master extends AbstractLoggingActor {
         int counter = 0;
         protected void handle(foundHashMessage message){
             // remove char from possible chars of corresponding pw
-            this.log().info("Found hash number  " + counter++);
+            if(++counter % 50 == 0)
+                this.log().info("Found " + counter + " hint hashes");
             
             HashSet<Character> hint_possible_chars = new HashSet<Character>();
             for(char c : message.input.toCharArray()){
