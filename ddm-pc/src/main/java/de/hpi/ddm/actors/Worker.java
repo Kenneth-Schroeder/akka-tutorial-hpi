@@ -71,6 +71,7 @@ public class Worker extends AbstractLoggingActor {
                 private static final long serialVersionUID = 8343040942748609598L;
                 private String hash;
                 private String letters;
+                private int index;
 	}
 
 	/////////////////
@@ -117,7 +118,20 @@ public class Worker extends AbstractLoggingActor {
 	}
         
         private void handle(crackPasswordMessage message){
-            // TODO
+            // try all combinations of the two characters of length x
+            
+            ArrayList<String> combinations = new ArrayList<String>();
+            pickN_withReplacement(message.letters, 10, combinations); // TODO length hardcoded
+            
+            for(String combination : combinations) {
+                if(hash(combination).equals(message.hash)) { // str1.equals(str2);
+                    this.sender().tell(new Master.foundPasswordMessage(message.index, combination), this.self());
+                    // this.log().info("Found password " + combination + " of database index " + message.index);
+                    break;
+                }
+            }
+            
+            this.sender().tell(new Master.idleMessage(), this.self());
         }
         
         private void handle(hashesOfInterestMessage message){
@@ -227,4 +241,21 @@ public class Worker extends AbstractLoggingActor {
 			}
 		}
 	}
+        
+        private void pickN_withReplacement(String options, int len, ArrayList<String> combinations) {
+            char[] cc = new char[len];
+            _pickN_withReplacement(cc, 0, options.toCharArray(), len, combinations);
+        }
+        
+        private void _pickN_withReplacement(char[] current_combination, int next_idx,  char[] options, int len, ArrayList<String> combinations) {
+            if(next_idx == len){
+                combinations.add(new String(current_combination));
+                return;
+            }
+            
+            for(char c : options){
+                current_combination[next_idx] = c;
+                _pickN_withReplacement(current_combination, next_idx + 1, options, len, combinations);
+            }
+        }
 }

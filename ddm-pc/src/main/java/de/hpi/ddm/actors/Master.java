@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.HashSet;
+import java.util.Queue;
 
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
@@ -68,6 +69,13 @@ public class Master extends AbstractLoggingActor {
                 private String input;
                 private String hash;
 	}
+        
+        @Data @AllArgsConstructor
+	public static class foundPasswordMessage implements Serializable {
+                private static final long serialVersionUID = 3303081601659723997L;
+                private int index;
+                private String password;
+	}
 	
 	/////////////////
 	// Actor State //
@@ -82,10 +90,11 @@ public class Master extends AbstractLoggingActor {
         private ArrayList<String> passwordCharOptions = new ArrayList<String>();
         private ArrayList<String> passwordHashes = new ArrayList<String>();
         private ArrayList<Integer> numberOfSolvedHints = new ArrayList<Integer>();
+        private ArrayList<String> solvedPasswords = new ArrayList<String>();
+        private int solved_pw_counter = 0;
         // TODO handle different number of hints
         
         private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();
-        private ArrayList<ArrayList<Boolean>> solvedHint = new ArrayList<ArrayList<Boolean>>();
         private boolean checkingHashes = false;
         private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>();
         
@@ -94,6 +103,8 @@ public class Master extends AbstractLoggingActor {
 
 	private long startTime;
         private boolean finishedReading = false;
+        
+        private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();
 	
 	/////////////////////
 	// Actor Lifecycle //
@@ -117,6 +128,7 @@ public class Master extends AbstractLoggingActor {
 				.match(RegistrationMessage.class, this::handle)
                                  .match(idleMessage.class, this::handle)
                                  .match(foundHashMessage.class, this::handle)
+                                 .match(foundPasswordMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
 	}
@@ -124,7 +136,7 @@ public class Master extends AbstractLoggingActor {
         int counter = 0;
         protected void handle(foundHashMessage message){
             // remove char from possible chars of corresponding pw
-            this.log().info("WE ACTUALLY FOUND A HASH! " + counter++);
+            this.log().info("Found hash number  " + counter++);
             
             HashSet<Character> hint_possible_chars = new HashSet<Character>();
             for(char c : message.input.toCharArray()){
@@ -133,7 +145,7 @@ public class Master extends AbstractLoggingActor {
             
             // which row(s) is the hash coming from?? use hashmap instead of hashset and point to list of indices  DONE
             // update possible chars at those rows
-            for(Integer row_idx : hashesOfInterest.get(message.hash)){
+            for(Integer row_idx : hashesOfInterest.get(message.hash)){ // iterate over the rows containing this hash
                 numberOfSolvedHints.set(row_idx, numberOfSolvedHints.get(row_idx)+1);
                         
                 HashSet<Character> remaining_possible_chars = new HashSet<Character>();
@@ -153,6 +165,9 @@ public class Master extends AbstractLoggingActor {
                 if(numberOfSolvedHints.get(row_idx) == 9){
                     // add idx to solvable pws
                     pw_ready_indices.add(row_idx);
+                    
+                    // send to idle worker if any
+                    trySendingPwTask();
                 }
             }
             
@@ -160,6 +175,17 @@ public class Master extends AbstractLoggingActor {
             // if all hints of pw are solved, queue possible pw cracking task
             // if worker is idle, send him this task
         }
+        
+        protected void handle(foundPasswordMessage message) {
+            solvedPasswords.set(message.index, message.password);
+            
+            
+            if(++solved_pw_counter == solvedPasswords.size()){
+                // FINISHED
+            }
+            this.log().info("Found " + solved_pw_counter + "/" + solvedPasswords.size() + " passwords");
+        }
+        
         
         protected void handle(idleMessage message) {
 		sendWork();
@@ -183,7 +209,6 @@ public class Master extends AbstractLoggingActor {
 		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
 		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
-		System.out.println("HANDLING BATCH MESSAGE...");
                 
 		if (message.getLines().isEmpty()) { // if nothing new is read tell the Collector to print the results
                         // distribute table to slaves
@@ -218,15 +243,14 @@ public class Master extends AbstractLoggingActor {
                         passwordHashes.add(line[4]);
                         passwordCharOptions.add(line[2]);
                         numberOfSolvedHints.add(0);
+                        solvedPasswords.add("");
                                 
                         ArrayList<String> hints = new ArrayList<String>();
-                        ArrayList<Boolean> false_List = new ArrayList<Boolean>(); // TODO not used i think
+                        
                         for(int i = 5; i < line.length; i++){
                             hints.add(line[i]);
-                            false_List.add(false);
                         }
                         hintHashes.add(hints);
-                        solvedHint.add(false_List);
                         
                         System.out.println(Arrays.toString(line)); // output what is received
                 }
@@ -280,6 +304,7 @@ public class Master extends AbstractLoggingActor {
         protected void sendWork(){
             if(prefixCounter == prefixes.size()){
                 System.out.println("All prefixes distributed!");
+                idle_workers.add(this.sender());
                 trySendingPwTask();
                 return;
             }
@@ -299,10 +324,13 @@ public class Master extends AbstractLoggingActor {
         
         protected void trySendingPwTask(){ // TODO also keep track of idle workers if we have nothing to send immediately
             if(pw_task_counter < pw_ready_indices.size()){
-                int row_idx = pw_ready_indices.get(pw_task_counter++);
+                int row_idx = pw_ready_indices.get(pw_task_counter);
                 
                 // build message
-                this.sender().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx)), this.self());
+                if(!idle_workers.isEmpty()){
+                    idle_workers.poll().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx), row_idx), this.self());
+                    pw_task_counter++;
+                }
             }
         }
         
