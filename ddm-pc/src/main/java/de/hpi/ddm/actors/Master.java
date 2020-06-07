@@ -179,10 +179,12 @@ public class Master extends AbstractLoggingActor {
         
         protected void handle(foundPasswordMessage message) {
             solvedPasswords.set(message.index, message.password);
+            this.collector.tell(new Collector.CollectMessage("Password of user " + (message.index+1) + " is " + message.password), reader);
             
             
             if(++solved_pw_counter == solvedPasswords.size()){
-                // FINISHED
+                this.collector.tell(new Collector.PrintMessage(), this.self());
+                this.terminate();
             }
             this.log().info("Found " + solved_pw_counter + "/" + solvedPasswords.size() + " passwords");
         }
