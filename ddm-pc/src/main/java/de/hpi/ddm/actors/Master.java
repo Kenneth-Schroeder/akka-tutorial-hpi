@@ -163,7 +163,7 @@ public class Master extends AbstractLoggingActor {
                 
                 passwordCharOptions.set(row_idx, result.toString());
                 
-                if(numberOfSolvedHints.get(row_idx) == 9){
+                if(numberOfSolvedHints.get(row_idx) == hintHashes.get(row_idx).size()){
                     // add idx to solvable pws
                     pw_ready_indices.add(row_idx);
                     
@@ -180,7 +180,6 @@ public class Master extends AbstractLoggingActor {
         protected void handle(foundPasswordMessage message) {
             solvedPasswords.set(message.index, message.password);
             this.collector.tell(new Collector.CollectMessage("Password of user " + (message.index+1) + " is " + message.password), reader);
-            
             
             if(++solved_pw_counter == solvedPasswords.size()){
                 this.collector.tell(new Collector.PrintMessage(), this.self());
