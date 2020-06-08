@@ -112,7 +112,7 @@ public class Worker extends AbstractLoggingActor {
 	}
         
         private void handle(crackPasswordMessage message){
-            // try all combinations of the two characters of length x
+            // try all combinations of the characters of length x
             
             ArrayList<String> combinations = new ArrayList<String>();
             pickN_withReplacement(message.letters, message.length, combinations);
@@ -135,7 +135,7 @@ public class Worker extends AbstractLoggingActor {
         private void handle(hashRangeMessage message) {
 		String suffixCharacters = "";
                 
-                for(char c : message.universe.toCharArray()){ // TODO hardcoded
+                for(char c : message.universe.toCharArray()){
                     if(message.prefix.indexOf(c) == -1){ // character not in prefix, thus can be used for suffix
                         suffixCharacters = suffixCharacters + c;
                     }
