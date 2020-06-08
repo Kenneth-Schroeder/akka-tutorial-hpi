@@ -50,14 +50,9 @@ public class Worker extends AbstractLoggingActor {
         @Data @AllArgsConstructor // creates constructors automatically
 	public static class hashRangeMessage implements Serializable { // hash all string of length l starting with prefix and using all characters but 'exclude'
                 private static final long serialVersionUID = 8343040942748609598L;
+                private String universe;
                 private String prefix;
                 private char exclude;
-	}
-        
-        @Data @AllArgsConstructor
-        public static class checkIfFoundMessage implements Serializable {
-                private static final long serialVersionUID = 8343040942748609598L;
-                private String hash;
 	}
         
         @Data @AllArgsConstructor
@@ -71,6 +66,7 @@ public class Worker extends AbstractLoggingActor {
                 private static final long serialVersionUID = 8343040942748609598L;
                 private String hash;
                 private String letters;
+                private int length;
                 private int index;
 	}
 
@@ -80,7 +76,6 @@ public class Worker extends AbstractLoggingActor {
 
 	private Member masterSystem;
 	private final Cluster cluster;
-        TreeMap<String, String> reverseSHA = new TreeMap<String, String>();
         private HashMap<String, LinkedList<Integer>> hashesOfInterest;
         
 	/////////////////////
@@ -110,7 +105,6 @@ public class Worker extends AbstractLoggingActor {
 				.match(MemberUp.class, this::handle)
 				.match(MemberRemoved.class, this::handle)
                                  .match(hashRangeMessage.class, this::handle)
-                                 .match(checkIfFoundMessage.class, this::handle)
                                  .match(hashesOfInterestMessage.class, this::handle)
                                  .match(crackPasswordMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
@@ -121,12 +115,11 @@ public class Worker extends AbstractLoggingActor {
             // try all combinations of the two characters of length x
             
             ArrayList<String> combinations = new ArrayList<String>();
-            pickN_withReplacement(message.letters, 10, combinations); // TODO length hardcoded
+            pickN_withReplacement(message.letters, message.length, combinations);
             
             for(String combination : combinations) {
-                if(hash(combination).equals(message.hash)) { // str1.equals(str2);
+                if(hash(combination).equals(message.hash)) {
                     this.sender().tell(new Master.foundPasswordMessage(message.index, combination), this.self());
-                    // this.log().info("Found password " + combination + " of database index " + message.index);
                     break;
                 }
             }
@@ -139,16 +132,10 @@ public class Worker extends AbstractLoggingActor {
             this.sender().tell(new Master.idleMessage(), this.self());
         }
         
-        private void handle(checkIfFoundMessage message){
-            if(reverseSHA.containsKey(message.hash)){
-                this.sender().tell(new Master.foundHashMessage(reverseSHA.get(message.hash), message.hash), this.self());
-            }
-        }
-        
         private void handle(hashRangeMessage message) {
 		String suffixCharacters = "";
                 
-                for(char c : "ABCDEFGHIJK".toCharArray()){ // TODO hardcoded
+                for(char c : message.universe.toCharArray()){ // TODO hardcoded
                     if(message.prefix.indexOf(c) == -1){ // character not in prefix, thus can be used for suffix
                         suffixCharacters = suffixCharacters + c;
                     }
@@ -166,7 +153,6 @@ public class Worker extends AbstractLoggingActor {
                     if(hashesOfInterest.containsKey(_hash)){
                         this.sender().tell(new Master.foundHashMessage(input, _hash), this.self());
                     }
-                    //reverseSHA.put(_hash, input);
                 }
                  
                 this.log().info("Finished all hints with prefix " + message.prefix + "... that are not using " + message.exclude);

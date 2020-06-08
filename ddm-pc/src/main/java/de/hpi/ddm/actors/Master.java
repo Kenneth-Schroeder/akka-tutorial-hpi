@@ -85,26 +85,25 @@ public class Master extends AbstractLoggingActor {
 	private final ActorRef collector;
 	private final List<ActorRef> workers;
         
-        private ArrayList<Integer> pw_ready_indices = new ArrayList<Integer>();
-        private int pw_task_counter = 0;
-        private ArrayList<String> passwordCharOptions = new ArrayList<String>();
-        private ArrayList<String> passwordHashes = new ArrayList<String>();
-        private ArrayList<Integer> numberOfSolvedHints = new ArrayList<Integer>();
-        private ArrayList<String> solvedPasswords = new ArrayList<String>();
-        private int solved_pw_counter = 0;
-        // TODO handle different number of hints
+        private ArrayList<Integer> pw_ready_indices = new ArrayList<Integer>();     // indizes of passwords of which all hints have been solved
+        private int pw_task_counter = 0;                                            // keeps track of which pw_ready_indices have been assigned to be solved already
+        private ArrayList<String> passwordCharOptions = new ArrayList<String>();    // character universe for each password
+        private ArrayList<String> passwordHashes = new ArrayList<String>();         // hashes of the passwords
+        private int passwordLength = 10;                                            // length of each password (single integer cuz' supposed to be the same across all passwords)
+        private ArrayList<Integer> numberOfSolvedHints = new ArrayList<Integer>();  // counters to keep track of how many hints have been solved
+        private ArrayList<String> solvedPasswords = new ArrayList<String>();        // all the plaintext passwords
+        private int solved_pw_counter = 0;                                          // counter for checking if all passwords are solved
         
-        private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();
-        private boolean checkingHashes = false;
-        private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>();
+        private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();   // all the hints in hash format
+        private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>(); // all the hints in hash format in hashMap form for easy lookup
         
-        ArrayList<String> prefixes = new ArrayList<String>();
-        private int prefixCounter = 0;
-
+        ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
+        private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
+        
 	private long startTime;
         private boolean finishedReading = false;
         
-        private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();
+        private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();  // queue of idle workers that couldn't be given new task immediately
 	
 	/////////////////////
 	// Actor Lifecycle //
@@ -195,11 +194,6 @@ public class Master extends AbstractLoggingActor {
 
 	protected void handle(StartMessage message) {
 		this.startTime = System.currentTimeMillis();
-		
-                this.log().info("BEGAN CALCULATING PREFIXES");
-                pickN_fromSet("ABCDEFGHIJK", 2, prefixes);
-                this.log().info("DONE CALCULATING PREFIXES " + prefixes.size());
-                
 		this.reader.tell(new Reader.ReadMessage(), this.self());
 	}
 	
@@ -213,9 +207,11 @@ public class Master extends AbstractLoggingActor {
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
                 
 		if (message.getLines().isEmpty()) { // if nothing new is read tell the Collector to print the results
-                        // distribute table to slaves
-                        // tell everybody to start work
-                        // build hashset
+                        this.log().info("Began prefix calculation...");
+                        pickN_fromSet(passwordCharOptions.get(0), 2, prefixes);
+                        this.log().info("Finished prefix calculation! " + prefixes.size());
+                    
+                    
                         for(int i = 0; i < hintHashes.size(); i++) { // ArrayList<String> line : hintHashes){
                             for(String hash : hintHashes.get(i)){
                                 LinkedList<Integer> temp = new LinkedList<Integer>();
@@ -244,6 +240,7 @@ public class Master extends AbstractLoggingActor {
 		for (String[] line : message.getLines()) {
                         passwordHashes.add(line[4]);
                         passwordCharOptions.add(line[2]);
+                        passwordLength = Integer.parseInt(line[3]);
                         numberOfSolvedHints.add(0);
                         solvedPasswords.add("");
                                 
@@ -315,13 +312,7 @@ public class Master extends AbstractLoggingActor {
             char nextExclude = nextPrefix.charAt(nextPrefix.length() - 1);
             nextPrefix = nextPrefix.substring(0, nextPrefix.length() - 1);
             
-            /*if(prefixCounter % 5 == 0){
-                if(!checkingHashes)
-                    checkHashesFound();
-                return;
-            }*/
-            
-            this.sender().tell(new Worker.hashRangeMessage(nextPrefix, nextExclude), this.self());
+            this.sender().tell(new Worker.hashRangeMessage(passwordCharOptions.get(0), nextPrefix, nextExclude), this.self()); // NOTE: passwords character options hardcoded to first entry since it's supposed to be the same for all rows
         }
         
         protected void trySendingPwTask(){ // TODO also keep track of idle workers if we have nothing to send immediately
@@ -330,7 +321,7 @@ public class Master extends AbstractLoggingActor {
                 
                 // build message
                 if(!idle_workers.isEmpty()){
-                    idle_workers.poll().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx), row_idx), this.self());
+                    idle_workers.poll().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx), passwordLength, row_idx), this.self());
                     pw_task_counter++;
                 }
             }

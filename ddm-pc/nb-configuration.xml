@@ -10,6 +10,7 @@ Without this configuration present, some functionality in the IDE may be limited
         <configurations>
             <configuration id="master" profiles=""/>
             <configuration id="slave" profiles=""/>
+            <configuration id="master_ds2" profiles=""/>
         </configurations>
     </config-data>
 </project-shared-configuration>
