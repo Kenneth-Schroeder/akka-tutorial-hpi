@@ -6,7 +6,7 @@ import de.hpi.ddm.configuration.ConfigurationSingleton;
 
 public class BloomFilter {
 
-	public static int DEFAULT_SIZE = 8 * 1024 * 1024 * ConfigurationSingleton.get().getDataSize();
+	public static int DEFAULT_SIZE = 8 * 1024 * 1024 * ConfigurationSingleton.get().getDataSize(); // INFO: 1 MiB
 	
 	private final BitSet bits;
 	private final int size;
