@@ -14,87 +14,90 @@ import de.hpi.ddm.MasterSystem;
 
 public class Worker extends AbstractLoggingActor {
 
-    ////////////////////////
-    // Actor Construction //
-    ////////////////////////
-    public static final String DEFAULT_NAME = "worker";
+	////////////////////////
+	// Actor Construction //
+	////////////////////////
+	
+	public static final String DEFAULT_NAME = "worker";
 
-    public static Props props() {
-        return Props.create(Worker.class);
-    }
+	public static Props props() {
+		return Props.create(Worker.class);
+	}
 
-    ////////////////////
-    // Actor Messages //
-    ////////////////////
-    /////////////////
-    // Actor State //
-    /////////////////
-    private Member masterSystem;
-    private final Cluster cluster = Cluster.get(this.context().system());
-    private final ActorRef largeMessageProxy = this.context().actorOf(LargeMessageProxy.props(), LargeMessageProxy.DEFAULT_NAME);
+	////////////////////
+	// Actor Messages //
+	////////////////////
 
-    private long registrationTime;
+	/////////////////
+	// Actor State //
+	/////////////////
 
-    /////////////////////
-    // Actor Lifecycle //
-    /////////////////////
-    @Override
-    public void preStart() {
-        Reaper.watchWithDefaultReaper(this);
+	private Member masterSystem;
+	private final Cluster cluster = Cluster.get(this.context().system());
+	private final ActorRef largeMessageProxy = this.context().actorOf(LargeMessageProxy.props(), LargeMessageProxy.DEFAULT_NAME);
+	
+	private long registrationTime;
+	
+	/////////////////////
+	// Actor Lifecycle //
+	/////////////////////
 
-        this.cluster.subscribe(this.self(), MemberUp.class, MemberRemoved.class);
-    }
+	@Override
+	public void preStart() {
+		Reaper.watchWithDefaultReaper(this);
+		
+		this.cluster.subscribe(this.self(), MemberUp.class, MemberRemoved.class);
+	}
 
-    @Override
-    public void postStop() {
-        this.cluster.unsubscribe(this.self());
-    }
+	@Override
+	public void postStop() {
+		this.cluster.unsubscribe(this.self());
+	}
 
-    ////////////////////
-    // Actor Behavior //
-    ////////////////////
-    @Override
-    public Receive createReceive() { // INFO: defines which messages the worker can receive
-        return receiveBuilder()
-                .match(CurrentClusterState.class, this::handle)
-                .match(MemberUp.class, this::handle)
-                .match(MemberRemoved.class, this::handle) // INFO: overloaded handle message with different functionalities depending on message type
-                .match(Object.class, this::handle)
-                .matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString())) // INFO: default handling if message cant be matched
-                .build();
-    }
+	////////////////////
+	// Actor Behavior //
+	////////////////////
 
-    private void handle(CurrentClusterState message) {
-        message.getMembers().forEach(member -> {
-            if (member.status().equals(MemberStatus.up())) { // INFO: register to the first master system that is up, if not in any system yet
-                this.register(member);
-            }
-        });
-    }
+	@Override
+	public Receive createReceive() {
+		return receiveBuilder()
+				.match(CurrentClusterState.class, this::handle)
+				.match(MemberUp.class, this::handle)
+				.match(MemberRemoved.class, this::handle)
+				.match(Object.class, this::handle)
+				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
+				.build();
+	}
 
-    private void handle(MemberUp message) {
-        this.register(message.member());
-    }
+	private void handle(CurrentClusterState message) {
+		message.getMembers().forEach(member -> {
+			if (member.status().equals(MemberStatus.up()))
+				this.register(member);
+		});
+	}
 
-    private void register(Member member) {
-        if ((this.masterSystem == null) && member.hasRole(MasterSystem.MASTER_ROLE)) {
-            this.masterSystem = member;
-            this.registrationTime = System.currentTimeMillis();
+	private void handle(MemberUp message) {
+		this.register(message.member());
+	}
 
-            this.getContext()
-                    .actorSelection(member.address() + "/user/" + Master.DEFAULT_NAME)
-                    .tell(new Master.RegistrationMessage(), this.self());
-        }
-    }
-
-    private void handle(MemberRemoved message) {
-        if (this.masterSystem.equals(message.member())) {
-            this.self().tell(PoisonPill.getInstance(), ActorRef.noSender());
-        }
-    }
-
-    private void handle(Object message) {
-        final long transmissionTime = System.currentTimeMillis() - this.registrationTime;
-        this.log().info("Data received in " + transmissionTime + " ms.");
-    }
+	private void register(Member member) {
+		if ((this.masterSystem == null) && member.hasRole(MasterSystem.MASTER_ROLE)) {
+			this.masterSystem = member;
+			this.registrationTime = System.currentTimeMillis();
+			
+			this.getContext()
+				.actorSelection(member.address() + "/user/" + Master.DEFAULT_NAME)
+				.tell(new Master.RegistrationMessage(), this.self());
+		}
+	}
+	
+	private void handle(MemberRemoved message) {
+		if (this.masterSystem.equals(message.member()))
+			this.self().tell(PoisonPill.getInstance(), ActorRef.noSender());
+	}
+	
+	private void handle(Object message) {
+		final long transmissionTime = System.currentTimeMillis() - this.registrationTime;
+		this.log().info("Data received in " + transmissionTime + " ms.");
+	}
 }
