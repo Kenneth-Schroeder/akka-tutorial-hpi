@@ -1,2 +1,5 @@
 /ddm-lmp/target/
 /ddm-pc/target/
+.DS_Store
+.idea
+*.iml
