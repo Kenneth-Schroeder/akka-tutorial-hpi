@@ -116,14 +116,18 @@ public class Worker extends AbstractLoggingActor {
             
             ArrayList<String> combinations = new ArrayList<String>();
             pickN_withReplacement(message.letters, message.length, combinations);
-            
+
+            boolean found = false;
             for(String combination : combinations) {
                 if(hash(combination).equals(message.hash)) {
+                	found = true;
                     this.sender().tell(new Master.foundPasswordMessage(message.index, combination), this.self());
                     break;
                 }
             }
-            
+            if(!found) {
+				this.log().info("[!!!] NO PASSWORD FOUND");
+			}
             this.sender().tell(new Master.idleMessage(), this.self());
         }
         

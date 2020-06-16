@@ -99,7 +99,7 @@ public class Master extends AbstractLoggingActor {
 
     private HashMap<ActorRef, HashPrefixes> whoCracksWhichPrefix = new HashMap<>();
     private LinkedList<HashPrefixes> uncrackedPrefixes = new LinkedList<>();
-    private int num_uncracked_prefixes = 0;
+    private int num_cracked_prefixes = 0;
 
 	private final ActorRef reader;
 	private final ActorRef collector;
@@ -117,6 +117,8 @@ public class Master extends AbstractLoggingActor {
 
     private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();   // all the hints in hash format
     private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>(); // all the hints in hash format in hashMap form for easy lookup
+
+    private HashSet<String> solvedHints = new HashSet<>();
 
 //    ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
 //    private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
@@ -156,9 +158,14 @@ public class Master extends AbstractLoggingActor {
         int counter = 0;
         protected void handle(foundHashMessage message){
             // remove char from possible chars of corresponding pw
+            if(solvedHints.contains(message.getHash())) {
+                return;
+            }
+
             if(++counter % 50 == 0)
                 this.log().info("Found " + counter + " hint hashes");
-            
+
+            solvedHints.add(message.getHash());
             HashSet<Character> hint_possible_chars = new HashSet<Character>();
             for(char c : message.input.toCharArray()){
                 hint_possible_chars.add(c);
@@ -211,6 +218,8 @@ public class Master extends AbstractLoggingActor {
         
         protected void handle(idleMessage message) {
             if(whoCracksWhichPrefix.containsKey(this.sender())) {
+                num_cracked_prefixes--;
+                this.log().info("Uncalculated: " + num_cracked_prefixes + " hint spaces.");
                 whoCracksWhichPrefix.remove(this.sender());
             }
             sendWork();
@@ -234,7 +243,7 @@ public class Master extends AbstractLoggingActor {
                         this.log().info("Began prefix calculation...");
                         ArrayList<String> prefixes = new ArrayList<String>();
                         pickN_fromSet(passwordCharUniverse, 2, prefixes);
-                        num_uncracked_prefixes = prefixes.size();
+                        num_cracked_prefixes = prefixes.size();
                         for(String prefix : prefixes) {
                             uncrackedPrefixes.add(new HashPrefixes(prefix, null));
                         }
@@ -255,6 +264,8 @@ public class Master extends AbstractLoggingActor {
                             }
                         }
                         finishedReading = true;
+
+                        this.log().info("HintHashes: " + hintHashes.size() + ", HashedOfInterest: " + hashesOfInterest.size());
                         
                         for(ActorRef worker : this.workers){
                             worker.tell(new Worker.hashesOfInterestMessage(hashesOfInterest), this.self());
@@ -334,6 +345,7 @@ public class Master extends AbstractLoggingActor {
             }
 		    this.context().unwatch(message.getActor());
 		    this.workers.remove(message.getActor());
+		    this.idle_workers.remove(message.getActor());
 		    this.log().info("Unregistered {}", message.getActor());
 	}
         
@@ -356,15 +368,16 @@ public class Master extends AbstractLoggingActor {
             this.sender().tell(new Worker.hashRangeMessage(passwordCharUniverse, nextPrefix, nextExclude), this.self()); // NOTE: passwords character options hardcoded to first entry since it's supposed to be the same for all rows
         }
         
-        protected void trySendingPwTask(){ // TODO also keep track of idle workers if we have nothing to send immediately
-            if(pw_task_counter < pw_ready_indices.size()){
+        protected void trySendingPwTask() { // TODO also keep track of idle workers if we have nothing to send immediately
+            if(num_cracked_prefixes > 0) {
+                return;
+            }
+            while(pw_task_counter < pw_ready_indices.size() && !idle_workers.isEmpty()){
                 int row_idx = pw_ready_indices.get(pw_task_counter);
                 
                 // build message
-                if(!idle_workers.isEmpty()){
-                    idle_workers.poll().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx), passwordLength, row_idx), this.self());
-                    pw_task_counter++;
-                }
+                idle_workers.poll().tell(new Worker.crackPasswordMessage(passwordHashes.get(row_idx), passwordCharOptions.get(row_idx), passwordLength, row_idx), this.self());
+                pw_task_counter++;
             }
         }
         
