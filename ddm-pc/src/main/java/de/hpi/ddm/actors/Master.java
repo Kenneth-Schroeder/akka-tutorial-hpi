@@ -7,11 +7,8 @@ import java.util.List;
 import java.util.HashSet;
 import java.util.Queue;
 
-import akka.actor.AbstractLoggingActor;
-import akka.actor.ActorRef;
-import akka.actor.PoisonPill;
-import akka.actor.Props;
-import akka.actor.Terminated;
+import akka.actor.*;
+
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Set;
@@ -81,6 +78,29 @@ public class Master extends AbstractLoggingActor {
 	// Actor State //
 	/////////////////
 
+//    @Data @AllArgsConstructor @NoArgsConstructor
+//    private static class PasswordToCrack {
+//	    private String hashedPassword;
+//	    private int passwordLength;
+//	    private String possibleCharacters;
+//    }
+//
+//    @Data @AllArgsConstructor @NoArgsConstructor
+//    private static class PasswordHint {
+//	    private String hashedHint;
+//	    private LinkedList<PasswordToCrack> referencedBy;
+//    }
+
+    @Data @AllArgsConstructor @NoArgsConstructor
+    private static class HashPrefixes {
+	    private String prefix;
+	    private ActorRef cracker;
+    }
+
+    private HashMap<ActorRef, HashPrefixes> whoCracksWhichPrefix = new HashMap<>();
+    private LinkedList<HashPrefixes> uncrackedPrefixes = new LinkedList<>();
+    private int num_uncracked_prefixes = 0;
+
 	private final ActorRef reader;
 	private final ActorRef collector;
 	private final List<ActorRef> workers;
@@ -98,8 +118,8 @@ public class Master extends AbstractLoggingActor {
     private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();   // all the hints in hash format
     private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>(); // all the hints in hash format in hashMap form for easy lookup
 
-    ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
-    private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
+//    ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
+//    private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
         
 	private long startTime;
     private boolean finishedReading = false;
@@ -190,7 +210,10 @@ public class Master extends AbstractLoggingActor {
         
         
         protected void handle(idleMessage message) {
-		sendWork();
+            if(whoCracksWhichPrefix.containsKey(this.sender())) {
+                whoCracksWhichPrefix.remove(this.sender());
+            }
+            sendWork();
 	}
 
 	protected void handle(StartMessage message) {
@@ -209,7 +232,12 @@ public class Master extends AbstractLoggingActor {
                 
 		if (message.getLines().isEmpty()) { // if nothing new is read tell the Collector to print the results
                         this.log().info("Began prefix calculation...");
+                        ArrayList<String> prefixes = new ArrayList<String>();
                         pickN_fromSet(passwordCharUniverse, 2, prefixes);
+                        num_uncracked_prefixes = prefixes.size();
+                        for(String prefix : prefixes) {
+                            uncrackedPrefixes.add(new HashPrefixes(prefix, null));
+                        }
                         this.log().info("Finished prefix calculation! " + prefixes.size());
                     
                     
@@ -297,20 +325,31 @@ public class Master extends AbstractLoggingActor {
 	}
 	
 	protected void handle(Terminated message) { // remove actor that terminated
-		this.context().unwatch(message.getActor());
-		this.workers.remove(message.getActor());
-//		this.log().info("Unregistered {}", message.getActor());
+            if(whoCracksWhichPrefix.containsKey(message.getActor())) {
+                this.log().info("A worker, who was working on cracking hints left the cluster. We will reschedule his tasks!");
+                HashPrefixes lostPrefix = whoCracksWhichPrefix.get(message.getActor());
+                whoCracksWhichPrefix.remove(message.getActor());
+                lostPrefix.cracker = null;
+                uncrackedPrefixes.add(lostPrefix);
+            }
+		    this.context().unwatch(message.getActor());
+		    this.workers.remove(message.getActor());
+		    this.log().info("Unregistered {}", message.getActor());
 	}
         
         protected void sendWork(){
-            if(prefixCounter == prefixes.size()){
+            if(uncrackedPrefixes.size() == 0){
                 System.out.println("All prefixes distributed!");
                 idle_workers.add(this.sender());
                 trySendingPwTask();
                 return;
             }
-            
-            String nextPrefix = prefixes.get(prefixCounter++);
+
+            HashPrefixes nextUncracked = uncrackedPrefixes.pop();
+            nextUncracked.cracker = this.sender();
+            whoCracksWhichPrefix.put(this.sender(), nextUncracked);
+
+            String nextPrefix = nextUncracked.prefix;
             char nextExclude = nextPrefix.charAt(nextPrefix.length() - 1);
             nextPrefix = nextPrefix.substring(0, nextPrefix.length() - 1);
             
