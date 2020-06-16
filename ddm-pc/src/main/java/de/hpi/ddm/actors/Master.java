@@ -58,19 +58,19 @@ public class Master extends AbstractLoggingActor {
 		private static final long serialVersionUID = 3303081601659723997L;
 	}
         
-        @Data
+	@Data
 	public static class idleMessage implements Serializable {
 		private static final long serialVersionUID = 3303081601659723997L;
 	}
         
-        @Data @AllArgsConstructor
+	@Data @AllArgsConstructor @NoArgsConstructor
 	public static class foundHashMessage implements Serializable {
                 private static final long serialVersionUID = 3303081601659723997L;
                 private String input;
                 private String hash;
 	}
         
-        @Data @AllArgsConstructor
+    @Data @AllArgsConstructor @NoArgsConstructor
 	public static class foundPasswordMessage implements Serializable {
                 private static final long serialVersionUID = 3303081601659723997L;
                 private int index;
@@ -85,26 +85,26 @@ public class Master extends AbstractLoggingActor {
 	private final ActorRef collector;
 	private final List<ActorRef> workers;
         
-        private ArrayList<Integer> pw_ready_indices = new ArrayList<Integer>();     // indizes of passwords of which all hints have been solved
-        private int pw_task_counter = 0;                                            // keeps track of which pw_ready_indices have been assigned to be solved already
-        private ArrayList<String> passwordCharOptions = new ArrayList<String>();    // character universe for each password
-        private String passwordCharUniverse = "ABCDEFGHIJK";                        // char universe of all passwords (single String cuz' supposed to be the same across all passwords)
-        private ArrayList<String> passwordHashes = new ArrayList<String>();         // hashes of the passwords
-        private int passwordLength = 10;                                            // length of each password (single integer cuz' supposed to be the same across all passwords)
-        private ArrayList<Integer> numberOfSolvedHints = new ArrayList<Integer>();  // counters to keep track of how many hints have been solved
-        private ArrayList<String> solvedPasswords = new ArrayList<String>();        // all the plaintext passwords
-        private int solved_pw_counter = 0;                                          // counter for checking if all passwords are solved
-        
-        private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();   // all the hints in hash format
-        private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>(); // all the hints in hash format in hashMap form for easy lookup
-        
-        ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
-        private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
+    private ArrayList<Integer> pw_ready_indices = new ArrayList<Integer>();     // indizes of passwords of which all hints have been solved
+    private int pw_task_counter = 0;                                            // keeps track of which pw_ready_indices have been assigned to be solved already
+    private ArrayList<String> passwordCharOptions = new ArrayList<String>();    // character universe for each password
+    private String passwordCharUniverse = "ABCDEFGHIJK";                        // char universe of all passwords (single String cuz' supposed to be the same across all passwords)
+    private ArrayList<String> passwordHashes = new ArrayList<String>();         // hashes of the passwords
+    private int passwordLength = 10;                                            // length of each password (single integer cuz' supposed to be the same across all passwords)
+    private ArrayList<Integer> numberOfSolvedHints = new ArrayList<Integer>();  // counters to keep track of how many hints have been solved
+    private ArrayList<String> solvedPasswords = new ArrayList<String>();        // all the plaintext passwords
+    private int solved_pw_counter = 0;                                          // counter for checking if all passwords are solved
+
+    private ArrayList<ArrayList<String>> hintHashes = new ArrayList<ArrayList<String>>();   // all the hints in hash format
+    private HashMap<String, LinkedList<Integer>> hashesOfInterest = new HashMap<String, LinkedList<Integer>>(); // all the hints in hash format in hashMap form for easy lookup
+
+    ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
+    private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
         
 	private long startTime;
-        private boolean finishedReading = false;
+    private boolean finishedReading = false;
         
-        private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();  // queue of idle workers that couldn't be given new task immediately
+    private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();  // queue of idle workers that couldn't be given new task immediately
 	
 	/////////////////////
 	// Actor Lifecycle //
@@ -253,7 +253,7 @@ public class Master extends AbstractLoggingActor {
                         }
                         hintHashes.add(hints);
                         
-                        System.out.println(Arrays.toString(line)); // output what is received
+//                        System.out.println(Arrays.toString(line)); // output what is received
                 }
                 
                 // master needs to wait for workers -> NO, there will already be some local workers once this function is started, assign range to worker once he registers to master

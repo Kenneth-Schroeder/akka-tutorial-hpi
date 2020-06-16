@@ -47,7 +47,7 @@ public class Worker extends AbstractLoggingActor {
 	// Actor Messages //
 	////////////////////
         
-        @Data @AllArgsConstructor // creates constructors automatically
+	@Data @AllArgsConstructor @NoArgsConstructor
 	public static class hashRangeMessage implements Serializable { // hash all string of length l starting with prefix and using all characters but 'exclude'
                 private static final long serialVersionUID = 8343040942748609598L;
                 private String universe;
@@ -55,13 +55,13 @@ public class Worker extends AbstractLoggingActor {
                 private char exclude;
 	}
         
-        @Data @AllArgsConstructor
+        @Data @AllArgsConstructor @NoArgsConstructor
         public static class hashesOfInterestMessage implements Serializable {
                 private static final long serialVersionUID = 8343040942748609598L;
                 private HashMap<String, LinkedList<Integer>> hashes;
 	}
         
-        @Data @AllArgsConstructor
+        @Data @AllArgsConstructor @NoArgsConstructor
         public static class crackPasswordMessage implements Serializable {
                 private static final long serialVersionUID = 8343040942748609598L;
                 private String hash;
