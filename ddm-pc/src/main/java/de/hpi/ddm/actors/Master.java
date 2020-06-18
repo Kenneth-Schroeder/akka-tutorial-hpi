@@ -123,7 +123,7 @@ public class Master extends AbstractLoggingActor {
 //    ArrayList<String> prefixes = new ArrayList<String>();   // list of prefixes of all the possible plaintext hints that need to be tried
 //    private int prefixCounter = 0;                          // counter to keep track which prefixes have been distributed to workers to be solved already
         
-	private long startTime;
+    private long startTime;
     private boolean finishedReading = false;
         
     private Queue<ActorRef> idle_workers = new LinkedList<ActorRef>();  // queue of idle workers that couldn't be given new task immediately
@@ -158,7 +158,8 @@ public class Master extends AbstractLoggingActor {
         int counter = 0;
         protected void handle(foundHashMessage message){
             // remove char from possible chars of corresponding pw
-            if(solvedHints.contains(message.getHash())) {
+            
+            if(solvedHints.contains(message.getHash())) { // can only happen if worker got lost, duplicate results will be ignored
                 return;
             }
 
